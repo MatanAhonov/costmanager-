@@ -10,10 +10,10 @@ import requests
 import pytest
 
 # ─── Service URLs - update these after deployment ───────────────────────
-URL_A = "http://localhost:3001"   # logs-service
-URL_B = "http://localhost:3002"   # users-service
-URL_C = "http://localhost:3003"   # costs-service
-URL_D = "http://localhost:3004"   # about-service
+URL_A = "https://cost-manager-logs-do2w.onrender.com"   # logs-service
+URL_B = "https://cost-manager-users-s7wa.onrender.com"   # users-service
+URL_C = "https://cost-manager-costs-y9b0.onrender.com"   # costs-service
+URL_D = "https://cost-manager-about-t2ki.onrender.com"   # about-service
 # ────────────────────────────────────────────────────────────────────────
 
 # The imaginary test user that must exist in the DB before tests run
