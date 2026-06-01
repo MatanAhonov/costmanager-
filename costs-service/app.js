@@ -105,23 +105,36 @@ function buildCostsArray(costDocs) {
     return CATEGORIES.map((cat) => ({ [cat]: grouped[cat] }));
 }
 
-/* ─────────────────────────────────────────
+/* -----------------------------------------
    POST /api/add  -  Add a new cost item
    Required: userid, description, category, sum
    Optional: date (defaults to request time)
-───────────────────────────────────────── */
+----------------------------------------- */
 app.post('/api/add', async (req, res) => {
-    // Process the next step in the operation
     try {
         // Pull all expected fields from the parsed JSON body
         const { userid, description, category, sum, date } = req.body;
-        // All fields except date are mandatory
-        if (userid === undefined || !description || !category || sum === undefined) {
+
+        // Validate each required field separately with a specific message
+        if (userid === undefined || userid === null) {
             await saveLog('POST', '/api/add', 400);
-            return res.status(400).json({
-                id: 'MISSING_FIELDS',
-                message: 'userid, description, category, and sum are all required'
-            });
+            return res.status(400).json({ id: 'MISSING_USERID', message: 'userid is required' });
+        }
+
+        // userid must be a number to match the schema definition
+        if (typeof userid !== 'number') {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'INVALID_USERID', message: 'userid must be a number' });
+        }
+
+        if (!description) {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'MISSING_DESCRIPTION', message: 'description is required' });
+        }
+
+        if (!category) {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'MISSING_CATEGORY', message: 'category is required' });
         }
 
         // Reject any category not in the supported list
@@ -133,10 +146,15 @@ app.post('/api/add', async (req, res) => {
             });
         }
 
-        // userid must be a number to match the schema definition
-        if (typeof userid !== 'number') {
+        if (sum === undefined || sum === null) {
             await saveLog('POST', '/api/add', 400);
-            return res.status(400).json({ id: 'INVALID_USERID', message: 'userid must be a number' });
+            return res.status(400).json({ id: 'MISSING_SUM', message: 'sum is required' });
+        }
+
+        // Reject negative sum values
+        if (sum < 0) {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'INVALID_SUM', message: 'cost cannot be negative number' });
         }
 
         // Verify the user exists in the database before adding the cost
@@ -164,36 +182,54 @@ app.post('/api/add', async (req, res) => {
         });
     } catch (err) {
         await saveLog('POST', '/api/add', 500);
-        // Send the HTTP response with the appropriate status code
         res.status(500).json({ id: 'ADD_COST_ERROR', message: err.message });
     }
 });
 
-/* ─────────────────────────────────────────
+/* -----------------------------------------
    GET /api/report  -  Monthly cost report
    Query params: id (userid), year, month
-───────────────────────────────────────── */
+----------------------------------------- */
 app.get('/api/report', async (req, res) => {
     try {
         // Read the three required query parameters
         const { id, year, month } = req.query;
-        // All three parameters must be present
-        if (!id || !year || !month) {
+
+        // Validate each parameter separately with a specific message
+        if (!id) {
             await saveLog('GET', '/api/report', 400);
-            return res.status(400).json({
-                id: 'MISSING_PARAMS',
-                message: 'id, year, and month query parameters are required'
-            });
+            return res.status(400).json({ id: 'MISSING_ID', message: 'id is required' });
+        }
+
+        if (!year) {
+            await saveLog('GET', '/api/report', 400);
+            return res.status(400).json({ id: 'MISSING_YEAR', message: 'year is required' });
+        }
+
+        if (!month) {
+            await saveLog('GET', '/api/report', 400);
+            return res.status(400).json({ id: 'MISSING_MONTH', message: 'month is required' });
         }
 
         // Convert the string query parameters to numbers
         const userid = Number(id);
         const yearNum = Number(year);
         const monthNum = Number(month);
+
         // Reject if any parameter is not a valid number
-        if (isNaN(userid) || isNaN(yearNum) || isNaN(monthNum)) {
+        if (isNaN(userid)) {
             await saveLog('GET', '/api/report', 400);
-            return res.status(400).json({ id: 'INVALID_PARAMS', message: 'id, year and month must be numbers' });
+            return res.status(400).json({ id: 'INVALID_ID', message: 'id must be a number' });
+        }
+
+        if (isNaN(yearNum)) {
+            await saveLog('GET', '/api/report', 400);
+            return res.status(400).json({ id: 'INVALID_YEAR', message: 'year must be a number' });
+        }
+
+        if (isNaN(monthNum)) {
+            await saveLog('GET', '/api/report', 400);
+            return res.status(400).json({ id: 'INVALID_MONTH', message: 'month must be a number' });
         }
 
         // Validate the month is within the calendar range 1-12
@@ -202,12 +238,12 @@ app.get('/api/report', async (req, res) => {
             return res.status(400).json({ id: 'INVALID_MONTH', message: 'month must be between 1 and 12' });
         }
 
-        /* Computed Design Pattern Implementation:
+        /*
+         * Computed Design Pattern Implementation:
          * When a report is requested for a past month, we first check
          * the computedreports collection for a cached result.
          * If found, we return it immediately without querying costs.
          * If not found, we calculate, cache, and return the result.
-         * This reduces CPU usage and speeds up repeated requests.
          */
         const now = new Date();
         // JS months are 0-indexed, so subtract 1 from monthNum
@@ -260,10 +296,10 @@ app.get('/api/report', async (req, res) => {
     }
 });
 
-/* ─────────────────────────────────────────
+/* -----------------------------------------
    GET /api/costs/total/:userid
    Internal endpoint used by users-service.
-───────────────────────────────────────── */
+----------------------------------------- */
 app.get('/api/costs/total/:userid', async (req, res) => {
     try {
         // Convert the userid parameter to a number

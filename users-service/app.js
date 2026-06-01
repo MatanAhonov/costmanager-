@@ -52,9 +52,9 @@ async function saveLog(method, path, status) {
     }
 }
 
-/* ─────────────────────────────────────────
+/* -----------------------------------------
    GET /api/users  -  List all users
-───────────────────────────────────────── */
+----------------------------------------- */
 app.get('/api/users', async (req, res) => {
     try {
         // Retrieve every document from the users collection
@@ -69,10 +69,28 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
-/* ─────────────────────────────────────────
+/* -----------------------------------------
+   GET /api/users/exists/:id
+   Internal endpoint used by costs-service
+   to verify a user exists before adding a cost.
+----------------------------------------- */
+app.get('/api/users/exists/:id', async (req, res) => {
+    try {
+        // Convert the id parameter to a number for the query
+        const userId = Number(req.params.id);
+        // Look up the user by numeric id field
+        const user = await User.findOne({ id: userId });
+        // Return a simple boolean result
+        res.status(200).json({ exists: !!user });
+    } catch (err) {
+        res.status(500).json({ id: 'CHECK_USER_ERROR', message: err.message });
+    }
+});
+
+/* -----------------------------------------
    GET /api/users/:id  -  Get one user
    Returns: { id, first_name, last_name, total }
-───────────────────────────────────────── */
+----------------------------------------- */
 app.get('/api/users/:id', async (req, res) => {
     try {
         // Convert the URL parameter string to a number
@@ -113,7 +131,6 @@ app.get('/api/users/:id', async (req, res) => {
             id: user.id,
             first_name: user.first_name,
             last_name: user.last_name,
-            // Process the next step in the operation
             total
         });
     } catch (err) {
@@ -122,27 +139,40 @@ app.get('/api/users/:id', async (req, res) => {
     }
 });
 
-/* ─────────────────────────────────────────
+/* -----------------------------------------
    POST /api/add  -  Add a new user
    Body: { id, first_name, last_name, birthday }
-───────────────────────────────────────── */
+----------------------------------------- */
 app.post('/api/add', async (req, res) => {
     try {
         // Destructure the expected fields from the JSON body
         const { id, first_name, last_name, birthday } = req.body;
-        // All four fields are mandatory - reject if any is missing
-        if (id === undefined || !first_name || !last_name || !birthday) {
+
+        // Validate each required field separately with a specific message
+        if (id === undefined || id === null) {
             await saveLog('POST', '/api/add', 400);
-            return res.status(400).json({
-                id: 'MISSING_FIELDS',
-                message: 'id, first_name, last_name, and birthday are all required'
-            });
+            return res.status(400).json({ id: 'MISSING_ID', message: 'id is required' });
         }
 
         // The id must be a Number as defined in the schema
         if (typeof id !== 'number') {
             await saveLog('POST', '/api/add', 400);
             return res.status(400).json({ id: 'INVALID_ID', message: 'id must be a number' });
+        }
+
+        if (!first_name) {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'MISSING_FIRST_NAME', message: 'first_name is required' });
+        }
+
+        if (!last_name) {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'MISSING_LAST_NAME', message: 'last_name is required' });
+        }
+
+        if (!birthday) {
+            await saveLog('POST', '/api/add', 400);
+            return res.status(400).json({ id: 'MISSING_BIRTHDAY', message: 'birthday is required' });
         }
 
         // Create the User document and write it to the database
@@ -162,25 +192,6 @@ app.post('/api/add', async (req, res) => {
         }
         await saveLog('POST', '/api/add', 500);
         res.status(500).json({ id: 'ADD_USER_ERROR', message: err.message });
-    }
-});
-
-/* ─────────────────────────────────────────
-   GET /api/users/exists/:id
-   Internal endpoint used by costs-service
-   to verify a user exists before adding a cost.
-───────────────────────────────────────── */
-app.get('/api/users/exists/:id', async (req, res) => {
-    // Process the next step in the operation
-    try {
-        // Convert the id parameter to a number for the query
-        const userId = Number(req.params.id);
-        // Look up the user by numeric id field
-        const user = await User.findOne({ id: userId });
-        // Return a simple boolean result
-        res.status(200).json({ exists: !!user });
-    } catch (err) {
-        res.status(500).json({ id: 'CHECK_USER_ERROR', message: err.message });
     }
 });
 
